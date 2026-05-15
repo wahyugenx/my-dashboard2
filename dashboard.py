@@ -148,14 +148,14 @@ if check_password():
             with c_main:
                 g1, g2 = st.columns(2)
                 with g1:
-                    st.write("**% KONTRIBUSI SALES PER DEPT**")
+                    st.write("**KONTRIBUSI SALES PER DEPT**")
                     s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
                     fig = px.pie(s_grp, values=c_sales, names=c_dept, hole=0.6)
                     fig.update_traces(textinfo='percent+label', textposition='outside')
                     fig.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
                     st.plotly_chart(fig, use_container_width=True)
                 with g2:
-                    st.write("**% KONTRIBUSI SHRINKAGE PER DEPT**")
+                    st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
                     r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
                     fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, hole=0.6)
                     fig2.update_traces(textinfo='percent+label', textposition='outside')
