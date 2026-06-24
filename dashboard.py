@@ -58,10 +58,8 @@ def process_sheet(excel_file, sheet_name):
     return df
 
 def find_col(df, keywords):
-    # Pencarian kolom diperketat agar tidak salah mengambil kolom Barcode / Item Code
     for col in df.columns:
-        if all(k.lower() in str(col).lower() for k in keywords): 
-            return col
+        if all(k.lower() in str(col).lower() for k in keywords): return col
     return None
 
 def format_rupiah(val):
@@ -80,8 +78,12 @@ def format_growth_html(val, inverse=False):
 
 def clean_and_convert_numeric(df, col):
     if col and col in df.columns:
-        # Konversi data ke numeric secara aman tanpa manipulasi string paksa yang merusak desimal asli
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].fillna(0)
+            return
+        s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
+        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        df[col] = pd.to_numeric(s, errors='coerce').fillna(0)
 
 # --- 3. MAIN APP ---
 raw_bytes = load_data(GD_URL)
@@ -97,8 +99,6 @@ if raw_bytes:
         top_n = st.slider("Top N Item:", 5, 50, 10)
 
     df_target = process_sheet(excel_obj, target_sheet)
-    
-    # Deteksi nama kolom secara akurat berdasarkan struktur Excel asli Anda
     c_sales = find_col(df_target, ['SALES', 'VALUE'])
     c_shrink = find_col(df_target, ['SHRINK', 'VALUE'])
     c_dept = find_col(df_target, ['DEPT', 'NAME'])
@@ -106,14 +106,12 @@ if raw_bytes:
     c_qty_s = find_col(df_target, ['SALES', 'QTY'])
     c_qty_r = find_col(df_target, ['SHRINK', 'QTY'])
 
-    # Pengaman jika deteksi otomatis gagal mencocokkan teks kolom secara pas
     if not c_sales: c_sales = [col for col in df_target.columns if 'SALES VALUE' in str(col).upper()][0]
     if not c_shrink: c_shrink = [col for col in df_target.columns if 'SHRINK VALUE' in str(col).upper()][0]
 
     for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
         clean_and_convert_numeric(df_target, c)
 
-    # Pembari hari berjalan Juni (1 - 23 Juni)
     pembant_hari = 23.0
 
     # Histori Logic
@@ -151,7 +149,7 @@ if raw_bytes:
         
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
-        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
         m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
         m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
         m5.metric("% S/S", f"{(tr/ts*100 if ts>0 else 0):.2f}%")
@@ -159,18 +157,41 @@ if raw_bytes:
         st.divider()
         c_main, c_side = st.columns([1.6, 1.4])
         with c_main:
+            # =========================================================================
+            # MAPPING WARNA DIAGRAM LINGKARAN (Sesuai Kriteria User)
+            # =========================================================================
+            # Fungsi lambda ditambahkan agar sistem mencocokkan kata kunci secara fleksibel
+            custom_colors = {
+                'POULTRY': '#FFD166',      # Kuning Pastel Elegan
+                'BEEF': '#EF476F',         # Merah
+                'SEAFOOD': '#118AB2',      # Biru
+                'PORK': '#8B5A2B',         # Coklat
+                'WHOLE CHEESE': '#FFFFFF',  # Putih
+                'OTHER': '#000000'         # Hitam
+            }
+            
+            # Buat kolom bayangan untuk mapping warna seragam
+            def assign_color_group(dept_name):
+                name_upper = str(dept_name).upper()
+                for key in custom_colors.keys():
+                    if key in name_upper:
+                        return key
+                return 'OTHER'
+                
+            df_target['COLOR_GROUP'] = df_target[c_dept].apply(assign_color_group)
+
             g1, g2 = st.columns(2)
             with g1:
                 st.write("**KONTRIBUSI SALES PER DEPT**")
-                s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
-                fig = px.pie(s_grp, values=c_sales, names=c_dept, hole=0.6)
+                s_grp = df_target.groupby([c_dept, 'COLOR_GROUP'])[c_sales].sum().nlargest(top_n).reset_index()
+                fig = px.pie(s_grp, values=c_sales, names=c_dept, color='COLOR_GROUP', color_discrete_map=custom_colors, hole=0.6)
                 fig.update_traces(textinfo='percent+label', textposition='outside')
                 fig.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
                 st.plotly_chart(fig, use_container_width=True)
             with g2:
                 st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
-                r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
-                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, hole=0.6)
+                r_grp = df_target.groupby([c_dept, 'COLOR_GROUP'])[c_shrink].sum().nlargest(top_n).reset_index()
+                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color='COLOR_GROUP', color_discrete_map=custom_colors, hole=0.6)
                 fig2.update_traces(textinfo='percent+label', textposition='outside')
                 fig2.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
                 st.plotly_chart(fig2, use_container_width=True)
