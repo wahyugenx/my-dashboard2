@@ -37,8 +37,13 @@ st.markdown("""
     th { background-color: #f8f9fa; padding: 6px 4px; text-align: left; border-bottom: 2px solid #dee2e6; white-space: nowrap; width: auto; }
     td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; white-space: nowrap; width: auto; }
     
-    /* Memaksa kolom rank dan angka mengambil space seminimal mungkin sesuai isi */
+    /* Memaksa kolom rank mengambil space seminimal mungkin */
     th:nth-child(1), td:nth-child(1) { width: 1%; }
+    
+    /* Membuat kolom DESCRIPTION (kolom ke-2) teks rata kiri */
+    th:nth-child(2), td:nth-child(2) { text-align: left; }
+    
+    /* Memaksa kolom-kolom angka di sebelah kanan mengambil space seminimal mungkin dan rata kanan */
     th:nth-last-child(1), td:nth-last-child(1),
     th:nth-last-child(2), td:nth-last-child(2),
     th:nth-last-child(3), td:nth-last-child(3),
@@ -166,7 +171,6 @@ if raw_bytes:
 
         st.divider()
         
-        # KEMBALI KE STRUKTUR ASLI: Blok Utama (Kiri Besar untuk Diagram & Tabel Dept, Kanan Kecil untuk Top Items)
         c_main, c_side = st.columns([1.6, 1.4])
         
         custom_colors = {
