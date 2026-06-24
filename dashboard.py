@@ -168,4 +168,87 @@ if raw_bytes:
             g1, g2 = st.columns(2)
             with g1:
                 st.write("**KONTRIBUSI SALES PER DEPT**")
-                s_grp = df_target.
+                # PERBAIKAN BARIS 171: Disambung utuh sempurna kembali
+                s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
+                fig = px.pie(s_grp, values=c_sales, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
+                fig.update_traces(textinfo='percent+label', textposition='outside')
+                fig.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
+                st.plotly_chart(fig, use_container_width=True)
+            with g2:
+                st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
+                r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
+                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
+                fig2.update_traces(textinfo='percent+label', textposition='outside')
+                fig2.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
+                st.plotly_chart(fig2, use_container_width=True)
+            
+            st.divider()
+            t1, t2 = st.columns(2)
+            with t1:
+                st.write("**Rincian Sales Dept**")
+                s_dept_data = df_target.groupby(c_dept).agg({c_qty_s: 'sum', c_sales: 'sum'}).reset_index()
+                s_dept_data = s_dept_data.nlargest(top_n, c_sales)
+                s_dept_data.insert(0, 'RANK', range(1, len(s_dept_data) + 1))
+                s_dept_data['AVG QTY/DAY'] = s_dept_data[c_qty_s] / pembant_hari
+                
+                s_tbl = s_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_s: 'TOTAL QTY', c_sales: 'TOTAL VALUE'})
+                s_tbl['GROWTH'] = s_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(s_tbl[s_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_sales"].get(str(x), 0))))
+                s_tbl['AVG QTY/DAY'] = s_tbl['AVG QTY/DAY'].apply(format_qty)
+                s_tbl['TOTAL QTY'] = s_tbl['TOTAL QTY'].apply(format_qty)
+                s_tbl['TOTAL VALUE'] = s_tbl['TOTAL VALUE'].apply(format_rupiah)
+                
+                st.write(s_tbl[['RANK', 'NAMA DEPARTEMEN', 'AVG QTY/DAY', 'TOTAL QTY', 'TOTAL VALUE', 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+                
+            with t2:
+                st.write("**Rincian Shrink Dept**")
+                sh_dept_data = df_target.groupby(c_dept).agg({c_qty_r: 'sum', c_shrink: 'sum'}).reset_index()
+                sh_dept_data = sh_dept_data.nlargest(top_n, c_shrink)
+                sh_dept_data.insert(0, 'RANK', range(1, len(sh_dept_data) + 1))
+                sh_dept_data['AVG QTY/DAY'] = sh_dept_data[c_qty_r] / pembant_hari
+                
+                r_tbl = sh_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_r: 'TOTAL QTY', c_shrink: 'TOTAL VALUE'})
+                r_tbl['GROWTH'] = r_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(r_tbl[r_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_shrink"].get(str(x), 0)), inverse=True))
+                r_tbl['AVG QTY/DAY'] = r_tbl['AVG QTY/DAY'].apply(format_qty)
+                r_tbl['TOTAL QTY'] = r_tbl['TOTAL QTY'].apply(format_qty)
+                r_tbl['TOTAL VALUE'] = r_tbl['TOTAL VALUE'].apply(format_rupiah)
+                
+                st.write(r_tbl[['RANK', 'NAMA DEPARTEMEN', 'AVG QTY/DAY', 'TOTAL QTY', 'TOTAL VALUE', 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+
+        with c_side:
+            st.write(f"**Top {top_n} Sales Items**")
+            top_s = df_target[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
+            top_s.insert(0, 'RANK', range(1, len(top_s) + 1))
+            top_s['AVG QTY/DAY'] = top_s[c_qty_s] / pembant_hari
+            top_s['GROWTH'] = top_s[c_desc].apply(lambda x: format_growth_html(get_delta_val(top_s[top_s[c_desc]==x][c_sales].sum(), avg_hist["item_sales"].get(str(x), 0))))
+            top_s[c_sales] = top_s[c_sales].apply(format_rupiah)
+            top_s[c_qty_s] = top_s[c_qty_s].apply(format_qty)
+            top_s['AVG QTY/DAY'] = top_s['AVG QTY/DAY'].apply(format_qty)
+            
+            st.write(top_s[['RANK', c_desc, 'AVG QTY/DAY', c_qty_s, c_sales, 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+            st.divider()
+            
+            st.write(f"**Top {top_n} Shrink Items**")
+            top_r = df_target[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
+            top_r.insert(0, 'RANK', range(1, len(top_r) + 1))
+            top_r['AVG QTY/DAY'] = top_r[c_qty_r] / pembant_hari
+            top_r['GROWTH'] = top_r[c_desc].apply(lambda x: format_growth_html(get_delta_val(top_r[top_r[c_desc]==x][c_shrink].sum(), avg_hist["item_shrink"].get(str(x), 0)), inverse=True))
+            top_r[c_shrink] = top_r[c_shrink].apply(format_rupiah)
+            top_r[c_qty_r] = top_r[c_qty_r].apply(format_qty)
+            top_r['AVG QTY/DAY'] = top_r['AVG QTY/DAY'].apply(format_qty)
+            
+            st.write(top_r[['RANK', c_desc, 'AVG QTY/DAY', c_qty_r, c_shrink, 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+
+    elif page == "Analisa By Dept":
+        st.markdown(f'<div class="main-header">ANALISA BY DEPT</div>', unsafe_allow_html=True)
+        sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
+        df_f = df_target[df_target[c_dept] == sel_dept]
+        
+        b1, b2 = st.columns(2)
+        with b1:
+            st.write(f"**Top Sales Items di {sel_dept}**")
+            df_temp_s = df_f[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
+            st.dataframe(df_temp_s.style.format({c_sales: "Rp {:,.0f}", c_qty_s: "{:,.2f}"}), use_container_width=True, hide_index=True)
+        with b2:
+            st.write(f"**Top Shrinkage Items di {sel_dept}**")
+            df_temp_r = df_f[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
+            st.dataframe(df_temp_r.style.format({c_shrink: "Rp {:,.0f}", c_qty_r: "{:,.2f}"}), use_container_width=True, hide_index=True)
