@@ -58,8 +58,10 @@ def process_sheet(excel_file, sheet_name):
     return df
 
 def find_col(df, keywords):
+    # Pencarian kolom diperketat agar tidak salah mengambil kolom Barcode / Item Code
     for col in df.columns:
-        if all(k.lower() in str(col).lower() for k in keywords): return col
+        if all(k.lower() in str(col).lower() for k in keywords): 
+            return col
     return None
 
 def format_rupiah(val):
@@ -78,11 +80,8 @@ def format_growth_html(val, inverse=False):
 
 def clean_and_convert_numeric(df, col):
     if col and col in df.columns:
-        # Konversi kolom menjadi string bersih tanpa spasi
-        s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
-        # Standarisasi pemisah angka ribuan lokal agar terbaca sebagai desimal Python asli
-        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        df[col] = pd.to_numeric(s, errors='coerce').fillna(0)
+        # Konversi data ke numeric secara aman tanpa manipulasi string paksa yang merusak desimal asli
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
 # --- 3. MAIN APP ---
 raw_bytes = load_data(GD_URL)
@@ -98,15 +97,23 @@ if raw_bytes:
         top_n = st.slider("Top N Item:", 5, 50, 10)
 
     df_target = process_sheet(excel_obj, target_sheet)
+    
+    # Deteksi nama kolom secara akurat berdasarkan struktur Excel asli Anda
     c_sales = find_col(df_target, ['SALES', 'VALUE'])
     c_shrink = find_col(df_target, ['SHRINK', 'VALUE'])
     c_dept = find_col(df_target, ['DEPT', 'NAME'])
-    c_desc, c_qty_s, c_qty_r = 'DESCRIPTION', find_col(df_target, ['SALES', 'QTY']), find_col(df_target, ['SHRINK', 'QTY'])
+    c_desc = 'DESCRIPTION'
+    c_qty_s = find_col(df_target, ['SALES', 'QTY'])
+    c_qty_r = find_col(df_target, ['SHRINK', 'QTY'])
+
+    # Pengaman jika deteksi otomatis gagal mencocokkan teks kolom secara pas
+    if not c_sales: c_sales = [col for col in df_target.columns if 'SALES VALUE' in str(col).upper()][0]
+    if not c_shrink: c_shrink = [col for col in df_target.columns if 'SHRINK VALUE' in str(col).upper()][0]
 
     for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
         clean_and_convert_numeric(df_target, c)
 
-    # Rentang pembagi hari untuk data Juni (1-23 Juni)
+    # Pembari hari berjalan Juni (1 - 23 Juni)
     pembant_hari = 23.0
 
     # Histori Logic
@@ -118,8 +125,11 @@ if raw_bytes:
         num_h = len(hist_sheets)
         for s in hist_sheets:
             df_h = process_sheet(excel_obj, s)
-            h_s, h_r, h_d = find_col(df_h, ['SALES', 'VALUE']), find_col(df_h, ['SHRINK', 'VALUE']), find_col(df_h, ['DEPT', 'NAME'])
-            h_qs, h_qr = find_col(df_h, ['SALES', 'QTY']), find_col(df_h, ['SHRINK', 'QTY'])
+            h_s = find_col(df_h, ['SALES', 'VALUE']) or [col for col in df_h.columns if 'SALES VALUE' in str(col).upper()][0]
+            h_r = find_col(df_h, ['SHRINK', 'VALUE']) or [col for col in df_h.columns if 'SHRINK VALUE' in str(col).upper()][0]
+            h_d = find_col(df_h, ['DEPT', 'NAME'])
+            h_qs = find_col(df_h, ['SALES', 'QTY'])
+            h_qr = find_col(df_h, ['SHRINK', 'QTY'])
             
             for col_h in [h_s, h_r, h_qs, h_qr]:
                 clean_and_convert_numeric(df_h, col_h)
