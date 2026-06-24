@@ -31,11 +31,21 @@ st.markdown("""
     .growth-up { background-color: #E8F5E9; color: #2E7D32; }
     .growth-down { background-color: #FFEBEE; color: #C62828; }
     
-    /* Style tabel agar muat dan rapi di layar HP */
-    .mobile-table-container { width: 100%; overflow-x: auto; }
+    /* Style tabel agar pas dengan teks/angka dan seragam */
+    .mobile-table-container { width: 100%; overflow-x: auto; margin-bottom: 20px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: auto; }
-    th { background-color: #f8f9fa; padding: 6px 4px; text-align: left; border-bottom: 2px solid #dee2e6; white-space: nowrap; }
-    td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; word-break: break-word; }
+    th { background-color: #f8f9fa; padding: 6px 4px; text-align: left; border-bottom: 2px solid #dee2e6; white-space: nowrap; width: auto; }
+    td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; white-space: nowrap; width: auto; }
+    
+    /* Memaksa kolom rank dan angka mengambil space seminimal mungkin */
+    th:nth-child(1), td:nth-child(1) { width: 1%; } /* Kolom RANK */
+    th:nth-child(3), td:nth-child(3), /* AVG QTY/DAY */
+    th:nth-child(4), td:nth-child(4), /* TOTAL QTY */
+    th:nth-child(5), td:nth-child(5), /* TOTAL VALUE */
+    th:nth-child(6), td:nth-child(6) { /* GROWTH */
+        width: 1%;
+        text-align: right;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -155,67 +165,43 @@ if raw_bytes:
         m5.metric("% S/S", f"{curr_ss:.2f}%", delta=f"{get_delta_val(curr_ss, past_ss):.1f}%" if past_ss > 0 else None, delta_color="inverse")
 
         st.divider()
-        c_main, c_side = st.columns([1.6, 1.4])
-        with c_main:
-            custom_colors = {
-                '015-POULTRY': '#FFD166',
-                '016-BEEF': '#EF476F',
-                '021-SEAFOOD': '#118AB2',
-                '018-PORK': '#8B5A2B',
-                '020-WHOLE CHEESE DELI': '#FFF3B0',
-                '017-LAMB': '#000000',
-                '019-OTHER': '#000000'
-            }
+        
+        # Penyelarasan Layout Utama: Seluruh komponen grafik dan tabel dipisahkan sejajar horizontal 50:50 (kiri & kanan)
+        custom_colors = {
+            '015-POULTRY': '#FFD166',
+            '016-BEEF': '#EF476F',
+            '021-SEAFOOD': '#118AB2',
+            '018-PORK': '#8B5A2B',
+            '020-WHOLE CHEESE DELI': '#FFF3B0',
+            '017-LAMB': '#000000',
+            '019-OTHER': '#000000'
+        }
 
-            g1, g2 = st.columns(2)
-            with g1:
-                st.write("**KONTRIBUSI SALES PER DEPT**")
-                s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
-                fig = px.pie(s_grp, values=c_sales, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
-                fig.update_traces(textinfo='percent+label', textposition='outside')
-                fig.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
-                st.plotly_chart(fig, use_container_width=True)
-            with g2:
-                st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
-                r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
-                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
-                fig2.update_traces(textinfo='percent+label', textposition='outside')
-                fig2.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
-                st.plotly_chart(fig2, use_container_width=True)
+        # Menggunakan perbandingan kolom seimbang (1:1) agar sejajar rapi
+        c_sales_side, c_shrink_side = st.columns(2)
+        
+        # --- BLOK SEBELAH KIRI (KHUSUS SALES / PENJUALAN) ---
+        with c_sales_side:
+            st.write("**KONTRIBUSI SALES PER DEPT**")
+            s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
+            fig = px.pie(s_grp, values=c_sales, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
+            fig.update_traces(textinfo='percent+label', textposition='outside')
+            fig.update_layout(showlegend=False, height=340, margin=dict(t=20,b=20,l=0,r=0))
+            st.plotly_chart(fig, use_container_width=True)
             
-            st.divider()
-            t1, t2 = st.columns(2)
-            with t1:
-                st.write("**Rincian Sales Dept**")
-                s_dept_data = df_target.groupby(c_dept).agg({c_qty_s: 'sum', c_sales: 'sum'}).reset_index()
-                s_dept_data = s_dept_data.nlargest(top_n, c_sales)
-                s_dept_data.insert(0, 'RANK', range(1, len(s_dept_data) + 1))
-                s_dept_data['AVG QTY/DAY'] = s_dept_data[c_qty_s] / pembant_hari
-                
-                s_tbl = s_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_s: 'TOTAL QTY', c_sales: 'TOTAL VALUE'})
-                s_tbl['GROWTH'] = s_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(s_tbl[s_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_sales"].get(str(x), 0))))
-                s_tbl['AVG QTY/DAY'] = s_tbl['AVG QTY/DAY'].apply(format_qty)
-                s_tbl['TOTAL QTY'] = s_tbl['TOTAL QTY'].apply(format_qty)
-                s_tbl['TOTAL VALUE'] = s_tbl['TOTAL VALUE'].apply(format_rupiah)
-                
-                st.write(f'<div class="mobile-table-container">{s_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
-                
-            with t2:
-                st.write("**Rincian Shrink Dept**")
-                sh_dept_data = df_target.groupby(c_dept).agg({c_qty_r: 'sum', c_shrink: 'sum'}).reset_index()
-                sh_dept_data = sh_dept_data.nlargest(top_n, c_shrink)
-                sh_dept_data.insert(0, 'RANK', range(1, len(sh_dept_data) + 1))
-                sh_dept_data['AVG QTY/DAY'] = sh_dept_data[c_qty_r] / pembant_hari
-                
-                r_tbl = sh_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_r: 'TOTAL QTY', c_shrink: 'TOTAL VALUE'})
-                r_tbl['GROWTH'] = r_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(r_tbl[r_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_shrink"].get(str(x), 0)), inverse=True))
-                r_tbl['AVG QTY/DAY'] = r_tbl['AVG QTY/DAY'].apply(format_qty)
-                r_tbl['TOTAL QTY'] = r_tbl['TOTAL QTY'].apply(format_qty)
-                r_tbl['TOTAL VALUE'] = r_tbl['TOTAL VALUE'].apply(format_rupiah)
-                
-                st.write(f'<div class="mobile-table-container">{r_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
-
-        with c_side:
+            st.write("**Rincian Sales Dept**")
+            s_dept_data = df_target.groupby(c_dept).agg({c_qty_s: 'sum', c_sales: 'sum'}).reset_index()
+            s_dept_data = s_dept_data.nlargest(top_n, c_sales)
+            s_dept_data.insert(0, 'RANK', range(1, len(s_dept_data) + 1))
+            s_dept_data['AVG QTY/DAY'] = s_dept_data[c_qty_s] / pembant_hari
+            
+            s_tbl = s_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_s: 'TOTAL QTY', c_sales: 'TOTAL VALUE'})
+            s_tbl['GROWTH'] = s_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(s_tbl[s_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_sales"].get(str(x), 0))))
+            s_tbl['AVG QTY/DAY'] = s_tbl['AVG QTY/DAY'].apply(format_qty)
+            s_tbl['TOTAL QTY'] = s_tbl['TOTAL QTY'].apply(format_qty)
+            s_tbl['TOTAL VALUE'] = s_tbl['TOTAL VALUE'].apply(format_rupiah)
+            st.write(f'<div class="mobile-table-container">{s_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
+            
             st.write(f"**Top {top_n} Sales Items**")
             top_s = df_target[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
             top_s.insert(0, 'RANK', range(1, len(top_s) + 1))
@@ -224,9 +210,29 @@ if raw_bytes:
             top_s[c_sales] = top_s[c_sales].apply(format_rupiah)
             top_s[c_qty_s] = top_s[c_qty_s].apply(format_qty)
             top_s['AVG QTY/DAY'] = top_s['AVG QTY/DAY'].apply(format_qty)
-            
             st.write(f'<div class="mobile-table-container">{top_s[["RANK", c_desc, "AVG QTY/DAY", c_qty_s, c_sales, "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
-            st.divider()
+
+        # --- BLOK SEBELAH KANAN (KHUSUS SHRINKAGE / KERUGIAN) ---
+        with c_shrink_side:
+            st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
+            r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
+            fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
+            fig2.update_traces(textinfo='percent+label', textposition='outside')
+            fig2.update_layout(showlegend=False, height=340, margin=dict(t=20,b=20,l=0,r=0))
+            st.plotly_chart(fig2, use_container_width=True)
+            
+            st.write("**Rincian Shrink Dept**")
+            sh_dept_data = df_target.groupby(c_dept).agg({c_qty_r: 'sum', c_shrink: 'sum'}).reset_index()
+            sh_dept_data = sh_dept_data.nlargest(top_n, c_shrink)
+            sh_dept_data.insert(0, 'RANK', range(1, len(sh_dept_data) + 1))
+            sh_dept_data['AVG QTY/DAY'] = sh_dept_data[c_qty_r] / pembant_hari
+            
+            r_tbl = sh_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_r: 'TOTAL QTY', c_shrink: 'TOTAL VALUE'})
+            r_tbl['GROWTH'] = r_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(r_tbl[r_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_shrink"].get(str(x), 0)), inverse=True))
+            r_tbl['AVG QTY/DAY'] = r_tbl['AVG QTY/DAY'].apply(format_qty)
+            r_tbl['TOTAL QTY'] = r_tbl['TOTAL QTY'].apply(format_qty)
+            r_tbl['TOTAL VALUE'] = r_tbl['TOTAL VALUE'].apply(format_rupiah)
+            st.write(f'<div class="mobile-table-container">{r_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
             
             st.write(f"**Top {top_n} Shrink Items**")
             top_r = df_target[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
@@ -236,10 +242,8 @@ if raw_bytes:
             top_r[c_shrink] = top_r[c_shrink].apply(format_rupiah)
             top_r[c_qty_r] = top_r[c_qty_r].apply(format_qty)
             top_r['AVG QTY/DAY'] = top_r['AVG QTY/DAY'].apply(format_qty)
-            
             st.write(f'<div class="mobile-table-container">{top_r[["RANK", c_desc, "AVG QTY/DAY", c_qty_r, c_shrink, "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
 
-    # --- PERBAIKAN DI HALAMAN ANALISA BY DEPT ---
     elif page == "Analisa By Dept":
         st.markdown(f'<div class="main-header">ANALISA BY DEPT</div>', unsafe_allow_html=True)
         sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
@@ -252,12 +256,10 @@ if raw_bytes:
             df_temp_s.insert(0, 'RANK', range(1, len(df_temp_s) + 1))
             df_temp_s['AVG QTY/DAY'] = df_temp_s[c_qty_s] / pembant_hari
             
-            # Format tampilan data
             df_temp_s['AVG QTY/DAY'] = df_temp_s['AVG QTY/DAY'].apply(format_qty)
             df_temp_s[c_qty_s] = df_temp_s[c_qty_s].apply(format_qty)
             df_temp_s[c_sales] = df_temp_s[c_sales].apply(format_rupiah)
             
-            # Tampilkan sebagai HTML table agar lebar kolom kompak untuk tampilan HP
             st.write(f'<div class="mobile-table-container">{df_temp_s[["RANK", c_desc, "AVG QTY/DAY", c_qty_s, c_sales]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
             
         with b2:
@@ -266,10 +268,8 @@ if raw_bytes:
             df_temp_r.insert(0, 'RANK', range(1, len(df_temp_r) + 1))
             df_temp_r['AVG QTY/DAY'] = df_temp_r[c_qty_r] / pembant_hari
             
-            # Format tampilan data
             df_temp_r['AVG QTY/DAY'] = df_temp_r['AVG QTY/DAY'].apply(format_qty)
             df_temp_r[c_qty_r] = df_temp_r[c_qty_r].apply(format_qty)
             df_temp_r[c_shrink] = df_temp_r[c_shrink].apply(format_rupiah)
             
-            # Tampilkan sebagai HTML table agar lebar kolom kompak untuk tampilan HP
             st.write(f'<div class="mobile-table-container">{df_temp_r[["RANK", c_desc, "AVG QTY/DAY", c_qty_r, c_shrink]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
