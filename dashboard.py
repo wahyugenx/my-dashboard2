@@ -21,8 +21,8 @@ st.markdown("""
         background-color: #E3F2FD; padding: 15px; border-radius: 10px;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.05); text-align: center;
     }
-    div[data-testid="column"]:nth-of-type(3) div[data-testid="stMetric"] { background-color: #FFEBEE; }
-    div[data-testid="column"]:nth-of-type(3) [data-testid="stMetricValue"] { color: #C62828 !important; }
+    div[data-testid="column"]:nth-of-type(2) div[data-testid="stMetric"] { background-color: #FFEBEE; }
+    div[data-testid="column"]:nth-of-type(2) [data-testid="stMetricValue"] { color: #C62828 !important; }
     
     .growth-badge {
         padding: 2px 8px; border-radius: 12px; font-size: 0.85rem; font-weight: bold;
@@ -73,7 +73,18 @@ def format_growth_html(val, inverse=False):
     color_class = ("growth-up" if val > 0 else "growth-down") if not inverse else ("growth-down" if val > 0 else "growth-up")
     return f'<span class="growth-badge {color_class}">{"↑" if val > 0 else "↓"} {abs(val):.1f}%</span>'
 
-# --- 3. MAIN APP (Langsung Masuk Tanpa Login) ---
+def clean_and_convert_numeric(df, col):
+    if col and col in df.columns:
+        # Menghapus spasi dan membersihkan format titik koma lokal ribuan
+        s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
+        # Kondisi mendeteksi format ribuan bertitik (Indonesian format)
+        if s.str.contains(r'\.\d{3}', regex=True).any():
+            s = s.str.replace('.', '', list=False).str.replace(',', '.')
+        else:
+            s = s.str.replace(',', '', list=False)
+        df[col] = pd.to_numeric(s, errors='coerce').fillna(0)
+
+# --- 3. MAIN APP ---
 raw_bytes = load_data(GD_URL)
 if raw_bytes:
     excel_obj = pd.ExcelFile(io.BytesIO(raw_bytes))
@@ -92,11 +103,12 @@ if raw_bytes:
     c_dept = find_col(df_target, ['DEPT', 'NAME'])
     c_desc, c_qty_s, c_qty_r = 'DESCRIPTION', find_col(df_target, ['SALES', 'QTY']), find_col(df_target, ['SHRINK', 'QTY'])
 
-    # Sinkronisasi format data teks angka pemisah ribuan agar terbaca numerik murni
-    for col in [c_sales, c_shrink, c_qty_s, c_qty_r]:
-        if col in df_target.columns:
-            df_target[col] = df_target[col].astype(str).str.replace(' ', '').str.replace('.', '').str.replace(',', '.')
-            df_target[col] = pd.to_numeric(df_target[col], errors='coerce').fillna(0)
+    # Pembersihan data numerik agar stabil
+    for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
+        clean_and_convert_numeric(df_target, c)
+
+    # Menentukan Pembagi Hari Secara Dinamis (Default ke 23 hari sesuai data berjalan Anda)
+    pembant_hari = 23.0
 
     # Histori Logic
     target_idx = sheets.index(target_sheet)
@@ -111,9 +123,7 @@ if raw_bytes:
             h_qs, h_qr = find_col(df_h, ['SALES', 'QTY']), find_col(df_h, ['SHRINK', 'QTY'])
             
             for col_h in [h_s, h_r, h_qs, h_qr]:
-                if col_h and col_h in df_h.columns:
-                    df_h[col_h] = df_h[col_h].astype(str).str.replace(' ', '').str.replace('.', '').str.replace(',', '.')
-                    df_h[col_h] = pd.to_numeric(df_h[col_h], errors='coerce').fillna(0)
+                clean_and_convert_numeric(df_h, col_h)
 
             if h_s and h_r:
                 avg_hist["sales"] += df_h[h_s].sum() / num_h
@@ -130,10 +140,10 @@ if raw_bytes:
     if page == "Dashboard Utama":
         ts, tr = df_target[c_sales].sum(), df_target[c_shrink].sum()
         
-        # --- BLOK KPI ATAS (Avg. Shrinkage tetap sejajar di samping Avg. Sales) ---
+        # --- BLOK KPI UTAS (Rata-rata Hari Dibagi Dinamis) ---
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("AVG. SALES / DAY", format_rupiah(ts/30), delta=f"{get_delta_val(ts/30, avg_hist['sales']/30):.1f}%" if avg_hist['sales']>0 else None)
-        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/30), delta=f"{get_delta_val(tr/30, avg_hist['shrink']/30):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
+        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
         m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
         m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
         m5.metric("% S/S", f"{(tr/ts*100 if ts>0 else 0):.2f}%")
@@ -164,7 +174,7 @@ if raw_bytes:
                 s_dept_data = df_target.groupby(c_dept).agg({c_qty_s: 'sum', c_sales: 'sum'}).reset_index()
                 s_dept_data = s_dept_data.nlargest(top_n, c_sales)
                 s_dept_data.insert(0, 'RANK', range(1, len(s_dept_data) + 1))
-                s_dept_data['AVG QTY/DAY'] = s_dept_data[c_qty_s] / 30.0
+                s_dept_data['AVG QTY/DAY'] = s_dept_data[c_qty_s] / pembant_hari
                 
                 s_tbl = s_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_s: 'TOTAL QTY', c_sales: 'TOTAL VALUE'})
                 s_tbl['GROWTH'] = s_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(s_tbl[s_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_sales"].get(x, 0))))
@@ -179,7 +189,7 @@ if raw_bytes:
                 sh_dept_data = df_target.groupby(c_dept).agg({c_qty_r: 'sum', c_shrink: 'sum'}).reset_index()
                 sh_dept_data = sh_dept_data.nlargest(top_n, c_shrink)
                 sh_dept_data.insert(0, 'RANK', range(1, len(sh_dept_data) + 1))
-                sh_dept_data['AVG QTY/DAY'] = sh_dept_data[c_qty_r] / 30.0
+                sh_dept_data['AVG QTY/DAY'] = sh_dept_data[c_qty_r] / pembant_hari
                 
                 r_tbl = sh_dept_data.rename(columns={c_dept: 'NAMA DEPARTEMEN', c_qty_r: 'TOTAL QTY', c_shrink: 'TOTAL VALUE'})
                 r_tbl['GROWTH'] = r_tbl['NAMA DEPARTEMEN'].apply(lambda x: format_growth_html(get_delta_val(r_tbl[r_tbl['NAMA DEPARTEMEN']==x]['TOTAL VALUE'].sum(), avg_hist["dept_shrink"].get(x, 0)), inverse=True))
@@ -193,7 +203,7 @@ if raw_bytes:
             st.write(f"**Top {top_n} Sales Items**")
             top_s = df_target[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
             top_s.insert(0, 'RANK', range(1, len(top_s) + 1))
-            top_s['AVG QTY/DAY'] = top_s[c_qty_s] / 30.0
+            top_s['AVG QTY/DAY'] = top_s[c_qty_s] / pembant_hari
             top_s['GROWTH'] = top_s[c_desc].apply(lambda x: format_growth_html(get_delta_val(top_s[top_s[c_desc]==x][c_sales].sum(), avg_hist["item_sales"].get(x, 0))))
             top_s[c_sales] = top_s[c_sales].apply(format_rupiah)
             top_s[c_qty_s] = top_s[c_qty_s].apply(format_qty)
@@ -205,7 +215,7 @@ if raw_bytes:
             st.write(f"**Top {top_n} Shrink Items**")
             top_r = df_target[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
             top_r.insert(0, 'RANK', range(1, len(top_r) + 1))
-            top_r['AVG QTY/DAY'] = top_r[c_qty_r] / 30.0
+            top_r['AVG QTY/DAY'] = top_r[c_qty_r] / pembant_hari
             top_r['GROWTH'] = top_r[c_desc].apply(lambda x: format_growth_html(get_delta_val(top_r[top_r[c_desc]==x][c_shrink].sum(), avg_hist["item_shrink"].get(x, 0)), inverse=True))
             top_r[c_shrink] = top_r[c_shrink].apply(format_rupiah)
             top_r[c_qty_r] = top_r[c_qty_r].apply(format_qty)
