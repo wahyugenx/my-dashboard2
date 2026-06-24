@@ -78,12 +78,7 @@ def format_growth_html(val, inverse=False):
 
 def clean_and_convert_numeric(df, col):
     if col and col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            df[col] = df[col].fillna(0)
-            return
-        s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
-        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        df[col] = pd.to_numeric(s, errors='coerce').fillna(0)
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
 # --- 3. MAIN APP ---
 raw_bytes = load_data(GD_URL)
@@ -142,4 +137,35 @@ if raw_bytes:
                 if h_d:
                     d_s, d_r = df_h.groupby(h_d)[h_s].sum().to_dict(), df_h.groupby(h_d)[h_r].sum().to_dict()
                     for k, v in d_s.items(): avg_hist["dept_sales"][str(k)] = avg_hist["dept_sales"].get(str(k), 0) + (v / num_h)
-                    for k, v in d_r.items(): avg_hist
+                    for k, v in d_r.items(): avg_hist["dept_shrink"][str(k)] = avg_hist["dept_shrink"].get(str(k), 0) + (v / num_h)
+
+    if page == "Dashboard Utama":
+        ts, tr = df_target[c_sales].sum(), df_target[c_shrink].sum()
+        
+        curr_ss = (tr / ts * 100) if ts > 0 else 0
+        past_ss = (avg_hist["shrink"] / avg_hist["sales"] * 100) if avg_hist["sales"] > 0 else 0
+        
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
+        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
+        m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
+        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m5.metric("% S/S", f"{curr_ss:.2f}%", delta=f"{get_delta_val(curr_ss, past_ss):.1f}%" if past_ss > 0 else None, delta_color="inverse")
+
+        st.divider()
+        c_main, c_side = st.columns([1.6, 1.4])
+        with c_main:
+            custom_colors = {
+                '015-POULTRY': '#FFD166',
+                '016-BEEF': '#EF476F',
+                '021-SEAFOOD': '#118AB2',
+                '018-PORK': '#8B5A2B',
+                '020-WHOLE CHEESE DELI': '#FFF3B0',
+                '017-LAMB': '#000000',
+                '019-OTHER': '#000000'
+            }
+
+            g1, g2 = st.columns(2)
+            with g1:
+                st.write("**KONTRIBUSI SALES PER DEPT**")
+                s_grp = df_target.
