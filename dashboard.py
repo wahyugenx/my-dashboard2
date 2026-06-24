@@ -31,25 +31,28 @@ st.markdown("""
     .growth-up { background-color: #E8F5E9; color: #2E7D32; }
     .growth-down { background-color: #FFEBEE; color: #C62828; }
     
-    /* Pengaturan ukuran tabel agar otomatis pas dengan isi teks/angka */
+    /* Pengaturan ukuran tabel dasar */
     .mobile-table-container { width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: auto; }
-    th { background-color: #f8f9fa; padding: 6px 4px; text-align: left; border-bottom: 2px solid #dee2e6; white-space: nowrap; width: auto; }
-    td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; white-space: nowrap; width: auto; }
     
-    /* Memaksa kolom rank mengambil space seminimal mungkin */
-    th:nth-child(1), td:nth-child(1) { width: 1%; }
+    /* Default header & cell border */
+    th, td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; white-space: nowrap; }
+    th { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; font-weight: bold; }
     
-    /* Membuat kolom DESCRIPTION (kolom ke-2) teks rata kiri */
-    th:nth-child(2), td:nth-child(2) { text-align: left; }
+    /* --- PERBAIKAN ALIGNMENT DAN UKURAN KOLOM --- */
+    /* Kolom 1 (RANK): Lebar minimal */
+    th:nth-child(1), td:nth-child(1) { width: 1%; text-align: center; }
     
-    /* Memaksa kolom-kolom angka di sebelah kanan mengambil space seminimal mungkin dan rata kanan */
-    th:nth-last-child(1), td:nth-last-child(1),
-    th:nth-last-child(2), td:nth-last-child(2),
-    th:nth-last-child(3), td:nth-last-child(3),
-    th:nth-last-child(4), td:nth-last-child(4) { 
-        width: 1%; 
-        text-align: right; 
+    /* Kolom 2 (NAMA DEPARTEMEN / DESCRIPTION): Dipaksa rata kiri agar rapi */
+    th:nth-child(2), td:nth-child(2) { text-align: left !important; width: auto; white-space: normal; }
+    
+    /* Kolom 3, 4, 5, 6 (Kolom Angka & Growth di kanan): Lebar minimal dan rata kanan */
+    th:nth-child(3), td:nth-child(3),
+    th:nth-child(4), td:nth-child(4),
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(6), td:nth-child(6) { 
+        width: 1% !important; 
+        text-align: right !important; 
     }
     </style>
     """, unsafe_allow_html=True)
