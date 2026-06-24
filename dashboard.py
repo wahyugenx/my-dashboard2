@@ -78,12 +78,8 @@ def format_growth_html(val, inverse=False):
 
 def clean_and_convert_numeric(df, col):
     if col and col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            df[col] = df[col].fillna(0)
-            return
-        s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
-        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        df[col] = pd.to_numeric(s, errors='coerce').fillna(0)
+        # DIKEMBALIKAN KE KODE ASLI YANG BENAR TANPA MANIPULASI STRING YANG MERUSAK DESIMAL
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
 # --- 3. MAIN APP ---
 raw_bytes = load_data(GD_URL)
@@ -112,7 +108,6 @@ if raw_bytes:
     for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
         clean_and_convert_numeric(df_target, c)
 
-    # DIKEMBALIKAN MUTLAK KE 30 HARI SESUAI KODE AWAL ANDA
     pembant_hari = 30.0
 
     # Histori Logic
@@ -158,37 +153,28 @@ if raw_bytes:
         st.divider()
         c_main, c_side = st.columns([1.6, 1.4])
         with c_main:
-            # Wana WHOLE CHEESE diganti menjadi Cream pastel (#FFF3B0)
             custom_colors = {
-                'POULTRY': '#FFD166',
-                'BEEF': '#EF476F',
-                'SEAFOOD': '#118AB2',
-                'PORK': '#8B5A2B',
-                'WHOLE CHEESE': '#FFF3B0',
-                'OTHER': '#000000'
+                '015-POULTRY': '#FFD166',
+                '016-BEEF': '#EF476F',
+                '021-SEAFOOD': '#118AB2',
+                '018-PORK': '#8B5A2B',
+                '020-WHOLE CHEESE DELI': '#FFF3B0',
+                '017-LAMB': '#000000',
+                '019-OTHER': '#000000'
             }
-            
-            def assign_color_group(dept_name):
-                name_upper = str(dept_name).upper()
-                for key in custom_colors.keys():
-                    if key in name_upper:
-                        return key
-                return 'OTHER'
-                
-            df_target['COLOR_GROUP'] = df_target[c_dept].apply(assign_color_group)
 
             g1, g2 = st.columns(2)
             with g1:
                 st.write("**KONTRIBUSI SALES PER DEPT**")
-                s_grp = df_target.groupby([c_dept, 'COLOR_GROUP'])[c_sales].sum().nlargest(top_n).reset_index()
-                fig = px.pie(s_grp, values=c_sales, names=c_dept, color='COLOR_GROUP', color_discrete_map=custom_colors, hole=0.6)
+                s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
+                fig = px.pie(s_grp, values=c_sales, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
                 fig.update_traces(textinfo='percent+label', textposition='outside')
                 fig.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
                 st.plotly_chart(fig, use_container_width=True)
             with g2:
                 st.write("**KONTRIBUSI SHRINKAGE PER DEPT**")
-                r_grp = df_target.groupby([c_dept, 'COLOR_GROUP'])[c_shrink].sum().nlargest(top_n).reset_index()
-                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color='COLOR_GROUP', color_discrete_map=custom_colors, hole=0.6)
+                r_grp = df_target.groupby(c_dept)[c_shrink].sum().nlargest(top_n).reset_index()
+                fig2 = px.pie(r_grp, values=c_shrink, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
                 fig2.update_traces(textinfo='percent+label', textposition='outside')
                 fig2.update_layout(showlegend=False, height=380, margin=dict(t=30,b=30,l=0,r=0))
                 st.plotly_chart(fig2, use_container_width=True)
