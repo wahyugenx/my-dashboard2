@@ -112,7 +112,8 @@ if raw_bytes:
     for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
         clean_and_convert_numeric(df_target, c)
 
-    pembant_hari = 23.0
+    # DIKEMBALIKAN MUTLAK KE 30 HARI SESUAI KODE AWAL ANDA
+    pembant_hari = 30.0
 
     # Histori Logic
     target_idx = sheets.index(target_sheet)
@@ -157,20 +158,16 @@ if raw_bytes:
         st.divider()
         c_main, c_side = st.columns([1.6, 1.4])
         with c_main:
-            # =========================================================================
-            # MAPPING WARNA DIAGRAM LINGKARAN (Sesuai Kriteria User)
-            # =========================================================================
-            # Fungsi lambda ditambahkan agar sistem mencocokkan kata kunci secara fleksibel
+            # Wana WHOLE CHEESE diganti menjadi Cream pastel (#FFF3B0)
             custom_colors = {
-                'POULTRY': '#FFD166',      # Kuning Pastel Elegan
-                'BEEF': '#EF476F',         # Merah
-                'SEAFOOD': '#118AB2',      # Biru
-                'PORK': '#8B5A2B',         # Coklat
-                'WHOLE CHEESE': '#FFFFFF',  # Putih
-                'OTHER': '#000000'         # Hitam
+                'POULTRY': '#FFD166',
+                'BEEF': '#EF476F',
+                'SEAFOOD': '#118AB2',
+                'PORK': '#8B5A2B',
+                'WHOLE CHEESE': '#FFF3B0',
+                'OTHER': '#000000'
             }
             
-            # Buat kolom bayangan untuk mapping warna seragam
             def assign_color_group(dept_name):
                 name_upper = str(dept_name).upper()
                 for key in custom_colors.keys():
