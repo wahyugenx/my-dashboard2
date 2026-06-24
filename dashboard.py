@@ -37,26 +37,33 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATA ENGINE ---
+# --- 2. DATA ENGINE (Sudah Diperbaiki Agar Hanya Membaca Sheet 1 Kali) ---
 @st.cache_data(ttl=600)
 def load_data(url):
     response = requests.get(url)
     return response.content if response.status_code == 200 else None
 
 def process_sheet(excel_file, sheet_name):
-    df_raw = excel_file.parse(sheet_name)
+    # Baca file hanya 1 kali saja untuk mencegah eror "not in the Workbook"
+    df_raw = excel_file.parse(sheet_name, header=None)
+    
     header_row = 0
     for i in range(min(20, len(df_raw))):
         if df_raw.iloc[i].astype(str).str.contains('ITEM CODE|DESCRIPTION', case=False).any():
-            header_row = i + 1
+            header_row = i
             break
-    df = excel_file.parse(sheet_name, skiprows=header_row)
-    df.columns = df.columns.str.strip()
+            
+    # Potong data berdasarkan baris header yang ditemukan tanpa melakukan .parse ulang
+    df = df_raw.iloc[header_row+1:].copy()
+    df.columns = df_raw.iloc[header_row].astype(str).str.strip()
+    
+    # Bersihkan nama kolom dari karakter whitespace bawaan Excel
+    df.columns = [str(c).strip() for c in df.columns]
     return df
 
 def find_col(df, keywords):
     for col in df.columns:
-        if all(k.lower() in col.lower() for k in keywords): return col
+        if all(k.lower() in str(col).lower() for k in keywords): return col
     return None
 
 def format_rupiah(val):
@@ -75,9 +82,7 @@ def format_growth_html(val, inverse=False):
 
 def clean_and_convert_numeric(df, col):
     if col and col in df.columns:
-        # Menghapus spasi dan membersihkan format titik koma lokal ribuan
         s = df[col].astype(str).str.replace(r'\s+', '', regex=True)
-        # Kondisi mendeteksi format ribuan bertitik (Indonesian format)
         if s.str.contains(r'\.\d{3}', regex=True).any():
             s = s.str.replace('.', '', list=False).str.replace(',', '.')
         else:
@@ -103,11 +108,10 @@ if raw_bytes:
     c_dept = find_col(df_target, ['DEPT', 'NAME'])
     c_desc, c_qty_s, c_qty_r = 'DESCRIPTION', find_col(df_target, ['SALES', 'QTY']), find_col(df_target, ['SHRINK', 'QTY'])
 
-    # Pembersihan data numerik agar stabil
     for c in [c_sales, c_shrink, c_qty_s, c_qty_r]:
         clean_and_convert_numeric(df_target, c)
 
-    # Menentukan Pembagi Hari Secara Dinamis (Default ke 23 hari sesuai data berjalan Anda)
+    # Menentukan Pembagi Hari Dinamis 23 hari berjalan Juni
     pembant_hari = 23.0
 
     # Histori Logic
@@ -140,7 +144,6 @@ if raw_bytes:
     if page == "Dashboard Utama":
         ts, tr = df_target[c_sales].sum(), df_target[c_shrink].sum()
         
-        # --- BLOK KPI UTAS (Rata-rata Hari Dibagi Dinamis) ---
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
         m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
@@ -217,23 +220,4 @@ if raw_bytes:
             top_r.insert(0, 'RANK', range(1, len(top_r) + 1))
             top_r['AVG QTY/DAY'] = top_r[c_qty_r] / pembant_hari
             top_r['GROWTH'] = top_r[c_desc].apply(lambda x: format_growth_html(get_delta_val(top_r[top_r[c_desc]==x][c_shrink].sum(), avg_hist["item_shrink"].get(x, 0)), inverse=True))
-            top_r[c_shrink] = top_r[c_shrink].apply(format_rupiah)
-            top_r[c_qty_r] = top_r[c_qty_r].apply(format_qty)
-            top_r['AVG QTY/DAY'] = top_r['AVG QTY/DAY'].apply(format_qty)
             
-            st.write(top_r[['RANK', c_desc, 'AVG QTY/DAY', c_qty_r, c_shrink, 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
-
-    elif page == "Analisa By Dept":
-        st.markdown(f'<div class="main-header">ANALISA BY DEPT</div>', unsafe_allow_html=True)
-        sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
-        df_f = df_target[df_target[c_dept] == sel_dept]
-        
-        b1, b2 = st.columns(2)
-        with b1:
-            st.write(f"**Top Sales Items di {sel_dept}**")
-            df_temp_s = df_f[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
-            st.dataframe(df_temp_s.style.format({c_sales: "Rp {:,.0f}", c_qty_s: "{:,.2f}"}), use_container_width=True, hide_index=True)
-        with b2:
-            st.write(f"**Top Shrinkage Items di {sel_dept}**")
-            df_temp_r = df_f[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
-            st.dataframe(df_temp_r.style.format({c_shrink: "Rp {:,.0f}", c_qty_r: "{:,.2f}"}), use_container_width=True, hide_index=True)
