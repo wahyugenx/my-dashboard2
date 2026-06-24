@@ -31,9 +31,11 @@ st.markdown("""
     .growth-up { background-color: #E8F5E9; color: #2E7D32; }
     .growth-down { background-color: #FFEBEE; color: #C62828; }
     
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { background-color: #f8f9fa; padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6; }
-    td { padding: 8px; border-bottom: 1px solid #dee2e6; }
+    /* Style tabel agar muat dan rapi di layar HP */
+    .mobile-table-container { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: auto; }
+    th { background-color: #f8f9fa; padding: 6px 4px; text-align: left; border-bottom: 2px solid #dee2e6; white-space: nowrap; }
+    td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; word-break: break-word; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -149,7 +151,7 @@ if raw_bytes:
         m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
         m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
         m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
-        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
         m5.metric("% S/S", f"{curr_ss:.2f}%", delta=f"{get_delta_val(curr_ss, past_ss):.1f}%" if past_ss > 0 else None, delta_color="inverse")
 
         st.divider()
@@ -168,7 +170,6 @@ if raw_bytes:
             g1, g2 = st.columns(2)
             with g1:
                 st.write("**KONTRIBUSI SALES PER DEPT**")
-                # PERBAIKAN BARIS 171: Disambung utuh sempurna kembali
                 s_grp = df_target.groupby(c_dept)[c_sales].sum().nlargest(top_n).reset_index()
                 fig = px.pie(s_grp, values=c_sales, names=c_dept, color=c_dept, color_discrete_map=custom_colors, hole=0.6)
                 fig.update_traces(textinfo='percent+label', textposition='outside')
@@ -197,7 +198,7 @@ if raw_bytes:
                 s_tbl['TOTAL QTY'] = s_tbl['TOTAL QTY'].apply(format_qty)
                 s_tbl['TOTAL VALUE'] = s_tbl['TOTAL VALUE'].apply(format_rupiah)
                 
-                st.write(s_tbl[['RANK', 'NAMA DEPARTEMEN', 'AVG QTY/DAY', 'TOTAL QTY', 'TOTAL VALUE', 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+                st.write(f'<div class="mobile-table-container">{s_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
                 
             with t2:
                 st.write("**Rincian Shrink Dept**")
@@ -212,7 +213,7 @@ if raw_bytes:
                 r_tbl['TOTAL QTY'] = r_tbl['TOTAL QTY'].apply(format_qty)
                 r_tbl['TOTAL VALUE'] = r_tbl['TOTAL VALUE'].apply(format_rupiah)
                 
-                st.write(r_tbl[['RANK', 'NAMA DEPARTEMEN', 'AVG QTY/DAY', 'TOTAL QTY', 'TOTAL VALUE', 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+                st.write(f'<div class="mobile-table-container">{r_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
 
         with c_side:
             st.write(f"**Top {top_n} Sales Items**")
@@ -224,7 +225,7 @@ if raw_bytes:
             top_s[c_qty_s] = top_s[c_qty_s].apply(format_qty)
             top_s['AVG QTY/DAY'] = top_s['AVG QTY/DAY'].apply(format_qty)
             
-            st.write(top_s[['RANK', c_desc, 'AVG QTY/DAY', c_qty_s, c_sales, 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+            st.write(f'<div class="mobile-table-container">{top_s[["RANK", c_desc, "AVG QTY/DAY", c_qty_s, c_sales, "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
             st.divider()
             
             st.write(f"**Top {top_n} Shrink Items**")
@@ -236,8 +237,9 @@ if raw_bytes:
             top_r[c_qty_r] = top_r[c_qty_r].apply(format_qty)
             top_r['AVG QTY/DAY'] = top_r['AVG QTY/DAY'].apply(format_qty)
             
-            st.write(top_r[['RANK', c_desc, 'AVG QTY/DAY', c_qty_r, c_shrink, 'GROWTH']].to_html(escape=False, index=False), unsafe_allow_html=True)
+            st.write(f'<div class="mobile-table-container">{top_r[["RANK", c_desc, "AVG QTY/DAY", c_qty_r, c_shrink, "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
 
+    # --- PERBAIKAN DI HALAMAN ANALISA BY DEPT ---
     elif page == "Analisa By Dept":
         st.markdown(f'<div class="main-header">ANALISA BY DEPT</div>', unsafe_allow_html=True)
         sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
@@ -247,8 +249,27 @@ if raw_bytes:
         with b1:
             st.write(f"**Top Sales Items di {sel_dept}**")
             df_temp_s = df_f[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
-            st.dataframe(df_temp_s.style.format({c_sales: "Rp {:,.0f}", c_qty_s: "{:,.2f}"}), use_container_width=True, hide_index=True)
+            df_temp_s.insert(0, 'RANK', range(1, len(df_temp_s) + 1))
+            df_temp_s['AVG QTY/DAY'] = df_temp_s[c_qty_s] / pembant_hari
+            
+            # Format tampilan data
+            df_temp_s['AVG QTY/DAY'] = df_temp_s['AVG QTY/DAY'].apply(format_qty)
+            df_temp_s[c_qty_s] = df_temp_s[c_qty_s].apply(format_qty)
+            df_temp_s[c_sales] = df_temp_s[c_sales].apply(format_rupiah)
+            
+            # Tampilkan sebagai HTML table agar lebar kolom kompak untuk tampilan HP
+            st.write(f'<div class="mobile-table-container">{df_temp_s[["RANK", c_desc, "AVG QTY/DAY", c_qty_s, c_sales]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
+            
         with b2:
             st.write(f"**Top Shrinkage Items di {sel_dept}**")
             df_temp_r = df_f[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
-            st.dataframe(df_temp_r.style.format({c_shrink: "Rp {:,.0f}", c_qty_r: "{:,.2f}"}), use_container_width=True, hide_index=True)
+            df_temp_r.insert(0, 'RANK', range(1, len(df_temp_r) + 1))
+            df_temp_r['AVG QTY/DAY'] = df_temp_r[c_qty_r] / pembant_hari
+            
+            # Format tampilan data
+            df_temp_r['AVG QTY/DAY'] = df_temp_r['AVG QTY/DAY'].apply(format_qty)
+            df_temp_r[c_qty_r] = df_temp_r[c_qty_r].apply(format_qty)
+            df_temp_r[c_shrink] = df_temp_r[c_shrink].apply(format_rupiah)
+            
+            # Tampilkan sebagai HTML table agar lebar kolom kompak untuk tampilan HP
+            st.write(f'<div class="mobile-table-container">{df_temp_r[["RANK", c_desc, "AVG QTY/DAY", c_qty_r, c_shrink]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
