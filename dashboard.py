@@ -39,14 +39,9 @@ st.markdown("""
     th, td { padding: 6px 4px; border-bottom: 1px solid #dee2e6; white-space: nowrap; }
     th { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; font-weight: bold; }
     
-    /* --- PERBAIKAN ALIGNMENT DAN UKURAN KOLOM --- */
-    /* Kolom 1 (RANK): Lebar minimal */
+    /* Alignment kolom */
     th:nth-child(1), td:nth-child(1) { width: 1%; text-align: center; }
-    
-    /* Kolom 2 (NAMA DEPARTEMEN / DESCRIPTION): Dipaksa rata kiri agar rapi */
     th:nth-child(2), td:nth-child(2) { text-align: left !important; width: auto; white-space: normal; }
-    
-    /* Kolom 3, 4, 5, 6 (Kolom Angka & Growth di kanan): Lebar minimal dan rata kanan */
     th:nth-child(3), td:nth-child(3),
     th:nth-child(4), td:nth-child(4),
     th:nth-child(5), td:nth-child(5),
@@ -110,7 +105,15 @@ if raw_bytes:
         st.title("📌 Navigasi")
         page = st.radio("Tampilan:", ["Dashboard Utama", "Analisa By Dept"])
         target_sheet = st.selectbox("Bulan Analisa:", sheets, index=len(sheets)-1)
-        range_val = st.selectbox("Rentang Pembanding:", [1, 3, 6, 12], format_func=lambda x: f"{x} Bulan")
+        
+        # PERBAIKAN: Penambahan opsi Tipe Pembanding (Bulan Lalu vs Tahun Lalu)
+        compare_mode = st.radio("Bandingkan Dengan:", ["Bulan-Bulan Sebelumnya", "Bulan Sama Tahun Lalu (YoY)"])
+        
+        if compare_mode == "Bulan-Bulan Sebelumnya":
+            range_val = st.selectbox("Rentang Pembanding:", [1, 3, 6, 12], format_func=lambda x: f"{x} Bulan Kebelakang")
+        else:
+            range_val = 12 # Otomatis mundur 12 langkah ke belakang untuk mencari bulan yang sama tahun lalu
+
         top_n = st.slider("Top N Item:", 5, 50, 10)
 
     df_target = process_sheet(excel_obj, target_sheet)
@@ -129,9 +132,17 @@ if raw_bytes:
 
     pembant_hari = 30.0
 
-    # Histori Logic
+    # --- HISTORI LOGIC (Disesuaikan berdasarkan mode pembanding) ---
     target_idx = sheets.index(target_sheet)
-    hist_sheets = sheets[max(0, target_idx - range_val) : target_idx]
+    
+    if compare_mode == "Bulan-Bulan Sebelumnya":
+        # Logika lama: mengambil rentang bulan-bulan ke belakang
+        hist_sheets = sheets[max(0, target_idx - range_val) : target_idx]
+    else:
+        # Logika baru YoY: ambil murni 1 sheet saja yang berjarak tepat 12 sheet ke belakang (Tahun Lalu)
+        yo_idx = target_idx - 12
+        hist_sheets = [sheets[yo_idx]] if yo_idx >= 0 else []
+
     avg_hist = {"sales": 0.0, "shrink": 0.0, "dept_sales": {}, "dept_shrink": {}, "item_sales": {}, "item_shrink": {}}
     
     if hist_sheets:
