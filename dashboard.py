@@ -107,10 +107,8 @@ if raw_bytes:
         
         st.divider()
         st.write("**⚙️ PENGATURAN BULAN**")
-        # 2 Dropdown bebas untuk membandingkan bulan apa saja bebas
         target_sheet = st.selectbox("Bulan Analisa Utama (A):", sheets, index=len(sheets)-1)
         
-        # Default pembanding diatur otomatis ke satu bulan sebelum Bulan Utama jika ada
         default_comp_idx = max(0, sheets.index(target_sheet) - 1)
         comp_sheet = st.selectbox("Bandingkan Dengan Bulan (B):", sheets, index=default_comp_idx)
         
@@ -134,7 +132,7 @@ if raw_bytes:
 
     pembant_hari = 30.0
 
-    # --- NEW HISTORI LOGIC (Langsung tembak target 1 sheet pembanding pilihan user) ---
+    # --- HISTORI LOGIC ---
     avg_hist = {"sales": 0.0, "shrink": 0.0, "dept_sales": {}, "dept_shrink": {}, "item_sales": {}, "item_shrink": {}}
     
     if comp_sheet:
@@ -167,9 +165,9 @@ if raw_bytes:
         
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
-        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
         m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
-        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
+        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
         m5.metric("% S/S", f"{curr_ss:.2f}%", delta=f"{get_delta_val(curr_ss, past_ss):.1f}%" if past_ss > 0 else None, delta_color="inverse")
 
         st.divider()
@@ -261,8 +259,20 @@ if raw_bytes:
 
     elif page == "Analisa By Dept":
         st.markdown(f'<div class="main-header">ANALISA BY DEPT</div>', unsafe_allow_html=True)
-        sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
+        
+        # Penempatan Filter Dropdown dan Search Bar secara berdampingan agar hemat tempat di HP
+        col_filter1, col_filter2 = st.columns([1, 1])
+        with col_filter1:
+            sel_dept = st.selectbox("Pilih Departemen:", sorted(df_target[c_dept].unique()))
+        with col_filter2:
+            # FITUR BARU: Fitur Pencarian Nama Item Bebas
+            search_query = st.text_input("🔍 Cari Nama Item (Ketik di sini):", "").strip()
+            
         df_f = df_target[df_target[c_dept] == sel_dept]
+        
+        # Logika Filter Pencarian Berdasarkan Input User
+        if search_query:
+            df_f = df_f[df_f[c_desc].astype(str).str.contains(search_query, case=False, na=False)]
         
         b1, b2 = st.columns(2)
         with b1:
