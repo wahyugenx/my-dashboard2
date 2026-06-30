@@ -104,18 +104,20 @@ if raw_bytes:
     with st.sidebar:
         st.title("📌 Navigasi")
         page = st.radio("Tampilan:", ["Dashboard Utama", "Analisa By Dept"])
-        target_sheet = st.selectbox("Bulan Analisa:", sheets, index=len(sheets)-1)
         
-        # PERBAIKAN: Penambahan opsi Tipe Pembanding (Bulan Lalu vs Tahun Lalu)
-        compare_mode = st.radio("Bandingkan Dengan:", ["Bulan-Bulan Sebelumnya", "Bulan Sama Tahun Lalu (YoY)"])
+        st.divider()
+        st.write("**⚙️ PENGATURAN BULAN**")
+        # 2 Dropdown bebas untuk membandingkan bulan apa saja bebas
+        target_sheet = st.selectbox("Bulan Analisa Utama (A):", sheets, index=len(sheets)-1)
         
-        if compare_mode == "Bulan-Bulan Sebelumnya":
-            range_val = st.selectbox("Rentang Pembanding:", [1, 3, 6, 12], format_func=lambda x: f"{x} Bulan Kebelakang")
-        else:
-            range_val = 12 # Otomatis mundur 12 langkah ke belakang untuk mencari bulan yang sama tahun lalu
-
+        # Default pembanding diatur otomatis ke satu bulan sebelum Bulan Utama jika ada
+        default_comp_idx = max(0, sheets.index(target_sheet) - 1)
+        comp_sheet = st.selectbox("Bandingkan Dengan Bulan (B):", sheets, index=default_comp_idx)
+        
+        st.divider()
         top_n = st.slider("Top N Item:", 5, 50, 10)
 
+    # Load Data Bulan Utama (A)
     df_target = process_sheet(excel_obj, target_sheet)
     c_sales = find_col(df_target, ['SALES', 'VALUE'])
     c_shrink = find_col(df_target, ['SHRINK', 'VALUE'])
@@ -132,43 +134,30 @@ if raw_bytes:
 
     pembant_hari = 30.0
 
-    # --- HISTORI LOGIC (Disesuaikan berdasarkan mode pembanding) ---
-    target_idx = sheets.index(target_sheet)
-    
-    if compare_mode == "Bulan-Bulan Sebelumnya":
-        # Logika lama: mengambil rentang bulan-bulan ke belakang
-        hist_sheets = sheets[max(0, target_idx - range_val) : target_idx]
-    else:
-        # Logika baru YoY: ambil murni 1 sheet saja yang berjarak tepat 12 sheet ke belakang (Tahun Lalu)
-        yo_idx = target_idx - 12
-        hist_sheets = [sheets[yo_idx]] if yo_idx >= 0 else []
-
+    # --- NEW HISTORI LOGIC (Langsung tembak target 1 sheet pembanding pilihan user) ---
     avg_hist = {"sales": 0.0, "shrink": 0.0, "dept_sales": {}, "dept_shrink": {}, "item_sales": {}, "item_shrink": {}}
     
-    if hist_sheets:
-        num_h = len(hist_sheets)
-        for s in hist_sheets:
-            df_h = process_sheet(excel_obj, s)
-            h_s = find_col(df_h, ['SALES', 'VALUE']) or [col for col in df_h.columns if 'SALES VALUE' in str(col).upper()][0]
-            h_r = find_col(df_h, ['SHRINK', 'VALUE']) or [col for col in df_h.columns if 'SHRINK VALUE' in str(col).upper()][0]
-            h_d = find_col(df_h, ['DEPT', 'NAME'])
-            h_qs = find_col(df_h, ['SALES', 'QTY'])
-            h_qr = find_col(df_h, ['SHRINK', 'QTY'])
-            
-            for col_h in [h_s, h_r, h_qs, h_qr]:
-                clean_and_convert_numeric(df_h, col_h)
+    if comp_sheet:
+        df_h = process_sheet(excel_obj, comp_sheet)
+        h_s = find_col(df_h, ['SALES', 'VALUE']) or [col for col in df_h.columns if 'SALES VALUE' in str(col).upper()][0]
+        h_r = find_col(df_h, ['SHRINK', 'VALUE']) or [col for col in df_h.columns if 'SHRINK VALUE' in str(col).upper()][0]
+        h_d = find_col(df_h, ['DEPT', 'NAME'])
+        h_qs = find_col(df_h, ['SALES', 'QTY'])
+        h_qr = find_col(df_h, ['SHRINK', 'QTY'])
+        
+        for col_h in [h_s, h_r, h_qs, h_qr]:
+            clean_and_convert_numeric(df_h, col_h)
 
-            if h_s and h_r:
-                avg_hist["sales"] += df_h[h_s].sum() / num_h
-                avg_hist["shrink"] += df_h[h_r].sum() / num_h
-                for _, row in df_h.iterrows():
-                    item = str(row[c_desc])
-                    avg_hist["item_sales"][item] = avg_hist["item_sales"].get(item, 0) + (row[h_s] / num_h)
-                    avg_hist["item_shrink"][item] = avg_hist["item_shrink"].get(item, 0) + (row[h_r] / num_h)
-                if h_d:
-                    d_s, d_r = df_h.groupby(h_d)[h_s].sum().to_dict(), df_h.groupby(h_d)[h_r].sum().to_dict()
-                    for k, v in d_s.items(): avg_hist["dept_sales"][str(k)] = avg_hist["dept_sales"].get(str(k), 0) + (v / num_h)
-                    for k, v in d_r.items(): avg_hist["dept_shrink"][str(k)] = avg_hist["dept_shrink"].get(str(k), 0) + (v / num_h)
+        if h_s and h_r:
+            avg_hist["sales"] = df_h[h_s].sum()
+            avg_hist["shrink"] = df_h[h_r].sum()
+            for _, row in df_h.iterrows():
+                item = str(row[c_desc])
+                avg_hist["item_sales"][item] = row[h_s]
+                avg_hist["item_shrink"][item] = row[h_r]
+            if h_d:
+                avg_hist["dept_sales"] = df_h.groupby(h_d)[h_s].sum().to_dict()
+                avg_hist["dept_shrink"] = df_h.groupby(h_d)[h_r].sum().to_dict()
 
     if page == "Dashboard Utama":
         ts, tr = df_target[c_sales].sum(), df_target[c_shrink].sum()
@@ -178,9 +167,9 @@ if raw_bytes:
         
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("AVG. SALES / DAY", format_rupiah(ts/pembant_hari), delta=f"{get_delta_val(ts/pembant_hari, avg_hist['sales']/pembant_hari):.1f}%" if avg_hist['sales']>0 else None)
-        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
+        m2.metric("AVG. SHRINKAGE / DAY", format_rupiah(tr/pembant_hari), delta=f"{get_delta_val(tr/pembant_hari, avg_hist['shrink']/pembant_hari):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
         m3.metric("TOTAL SALES", format_rupiah(ts), delta=f"{get_delta_val(ts, avg_hist['sales']):.1f}%" if avg_hist['sales']>0 else None)
-        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']/pembant_hari>0 else None, delta_color="inverse")
+        m4.metric("TOTAL SHRINK", format_rupiah(tr), delta=f"{get_delta_val(tr, avg_hist['shrink']):.1f}%" if avg_hist['shrink']>0 else None, delta_color="inverse")
         m5.metric("% S/S", f"{curr_ss:.2f}%", delta=f"{get_delta_val(curr_ss, past_ss):.1f}%" if past_ss > 0 else None, delta_color="inverse")
 
         st.divider()
@@ -217,7 +206,7 @@ if raw_bytes:
             st.divider()
             t1, t2 = st.columns(2)
             with t1:
-                st.write("**Rincian Sales Dept**")
+                st.write(f"**Rincian Sales Dept ({target_sheet} vs {comp_sheet})**")
                 s_dept_data = df_target.groupby(c_dept).agg({c_qty_s: 'sum', c_sales: 'sum'}).reset_index()
                 s_dept_data = s_dept_data.nlargest(top_n, c_sales)
                 s_dept_data.insert(0, 'RANK', range(1, len(s_dept_data) + 1))
@@ -232,7 +221,7 @@ if raw_bytes:
                 st.write(f'<div class="mobile-table-container">{s_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
                 
             with t2:
-                st.write("**Rincian Shrink Dept**")
+                st.write(f"**Rincian Shrink Dept ({target_sheet} vs {comp_sheet})**")
                 sh_dept_data = df_target.groupby(c_dept).agg({c_qty_r: 'sum', c_shrink: 'sum'}).reset_index()
                 sh_dept_data = sh_dept_data.nlargest(top_n, c_shrink)
                 sh_dept_data.insert(0, 'RANK', range(1, len(sh_dept_data) + 1))
@@ -247,7 +236,7 @@ if raw_bytes:
                 st.write(f'<div class="mobile-table-container">{r_tbl[["RANK", "NAMA DEPARTEMEN", "AVG QTY/DAY", "TOTAL QTY", "TOTAL VALUE", "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
 
         with c_side:
-            st.write(f"**Top {top_n} Sales Items**")
+            st.write(f"**Top {top_n} Sales Items ({target_sheet} vs {comp_sheet})**")
             top_s = df_target[[c_desc, c_qty_s, c_sales]].nlargest(top_n, c_sales).copy()
             top_s.insert(0, 'RANK', range(1, len(top_s) + 1))
             top_s['AVG QTY/DAY'] = top_s[c_qty_s] / pembant_hari
@@ -259,7 +248,7 @@ if raw_bytes:
             st.write(f'<div class="mobile-table-container">{top_s[["RANK", c_desc, "AVG QTY/DAY", c_qty_s, c_sales, "GROWTH"]].to_html(escape=False, index=False)}</div>', unsafe_allow_html=True)
             st.divider()
             
-            st.write(f"**Top {top_n} Shrink Items**")
+            st.write(f"**Top {top_n} Shrink Items ({target_sheet} vs {comp_sheet})**")
             top_r = df_target[[c_desc, c_qty_r, c_shrink]].nlargest(top_n, c_shrink).copy()
             top_r.insert(0, 'RANK', range(1, len(top_r) + 1))
             top_r['AVG QTY/DAY'] = top_r[c_qty_r] / pembant_hari
